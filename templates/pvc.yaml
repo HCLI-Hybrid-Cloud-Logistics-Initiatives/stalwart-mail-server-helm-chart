@@ -1,0 +1,52 @@
+{{- if .Values.storage.pvc.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "stalwart-mail-server.dataPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stalwart-mail-server.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-storage
+  {{- with .Values.storage.pvc.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.storage.pvc.accessMode }}
+  {{- if .Values.storage.pvc.storageClass }}
+  storageClassName: {{ .Values.storage.pvc.storageClass }}
+  {{- else if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.pvc.size }}
+{{- end }}
+
+---
+{{- if and .Values.storage.pvc.config.enabled (eq .Values.config.type "pvc") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "stalwart-mail-server.configPvcName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stalwart-mail-server.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config-storage
+  {{- with .Values.storage.pvc.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.storage.pvc.config.accessMode }}
+  {{- if .Values.storage.pvc.config.storageClass }}
+  storageClassName: {{ .Values.storage.pvc.config.storageClass }}
+  {{- else if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.pvc.config.size }}
+{{- end }}

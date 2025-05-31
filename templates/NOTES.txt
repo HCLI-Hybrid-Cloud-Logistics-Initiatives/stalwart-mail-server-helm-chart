@@ -1,0 +1,124 @@
+🎉 Stalwart Mail Server has been successfully deployed!
+
+Deployment Profile: {{ .Values.global.profile | upper }}
+Replicas: {{ include "stalwart-mail-server.replicaCount" . }}
+{{- if eq (include "stalwart-mail-server.postgresql-ha.enabled" .) "true" }}
+PostgreSQL HA: ✅ Enabled
+{{- else }}
+PostgreSQL HA: ❌ Disabled (using filesystem storage)
+{{- end }}
+{{- if eq (include "stalwart-mail-server.redis.enabled" .) "true" }}
+Redis: ✅ Enabled (for coordination)
+{{- else }}
+Redis: ❌ Disabled
+{{- end }}
+
+## Access Information
+
+### Web Admin Interface
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  URL: https://{{ $host.host }}/
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "stalwart-mail-server.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "stalwart-mail-server.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "stalwart-mail-server.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.ports.webadmin.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "stalwart-mail-server.fullname" . }} 8080:{{ .Values.service.ports.webadmin.port }}
+{{- end }}
+
+### Default Admin Credentials
+Username: admin
+Password: Run this command to get the password:
+  kubectl get secret --namespace {{ .Release.Namespace }} {{ include "stalwart-mail-server.secretName" . }} -o jsonpath="{.data.admin-password}" | base64 --decode
+
+## Mail Server Ports
+- SMTP: 25
+- SMTP Submission: 587
+- SMTP over SSL: 465
+- IMAP: 143
+- IMAP over SSL: 993
+- POP3: 110
+- POP3 over SSL: 995
+- ManageSieve: 4190
+
+## Next Steps
+
+1. **Configure DNS Records**: Set up MX, A, SPF, DKIM, and DMARC records for your domain.
+
+2. **Set up TLS Certificates**: Configure ACME/Let's Encrypt or upload your own certificates via the web interface.
+
+3. **Create Email Accounts**: Use the web interface to create user accounts and mailboxes.
+
+4. **Test Email Flow**: Send test emails to verify SMTP and IMAP functionality.
+
+5. **Configure Monitoring**: If enabled, check Prometheus metrics at /metrics endpoint.
+
+## Useful Commands
+
+### Check Pod Status
+kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "stalwart-mail-server.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+### View Logs
+kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "stalwart-mail-server.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -f
+
+### Access Pod Shell
+kubectl exec --namespace {{ .Release.Namespace }} -it deployment/{{ include "stalwart-mail-server.fullname" . }} -- /bin/sh
+
+### Check Configuration
+{{- if eq .Values.config.type "pvc" }}
+kubectl exec --namespace {{ .Release.Namespace }} -it deployment/{{ include "stalwart-mail-server.fullname" . }} -- cat /config/config.toml
+{{- else }}
+kubectl get configmap --namespace {{ .Release.Namespace }} {{ include "stalwart-mail-server.configMapName" . }} -o yaml
+{{- end }}
+
+### Scale Deployment (if not using HPA)
+kubectl scale --namespace {{ .Release.Namespace }} deployment/{{ include "stalwart-mail-server.fullname" . }} --replicas=3
+
+## Security Notes
+
+✅ Pod Security Standards: {{ .Values.security.podSecurityStandards }}
+{{- if .Values.security.networkPolicies.enabled }}
+✅ Network Policies: Enabled
+{{- else }}
+❌ Network Policies: Disabled
+{{- end }}
+{{- if .Values.stalwart.podAntiAffinity.enabled }}
+✅ Pod Anti-Affinity: Enabled ({{ .Values.stalwart.podAntiAffinity.type }})
+{{- else }}
+❌ Pod Anti-Affinity: Disabled
+{{- end }}
+✅ Non-root Containers: Enabled
+✅ Read-only Root Filesystem: Enabled
+✅ Capabilities Dropped: ALL
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. Check pod events:
+   kubectl describe pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+2. Verify storage:
+   kubectl get pvc --namespace {{ .Release.Namespace }}
+
+3. Check service endpoints:
+   kubectl get endpoints --namespace {{ .Release.Namespace }} {{ include "stalwart-mail-server.fullname" . }}
+
+4. Test connectivity:
+   kubectl exec --namespace {{ .Release.Namespace }} -it deployment/{{ include "stalwart-mail-server.fullname" . }} -- netstat -tlnp
+
+## Support
+
+- Documentation: https://stalw.art/docs/
+- GitHub Issues: https://github.com/stalwartlabs/mail-server/issues
+- Community Forum: https://github.com/stalwartlabs/mail-server/discussions
+
+Happy mailing! 📧

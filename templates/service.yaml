@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stalwart-mail-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stalwart-mail-server.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- if eq .Values.service.type "LoadBalancer" }}
+  {{- if .Values.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ .Values.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- if .Values.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  selector:
+    {{- include "stalwart-mail-server.selectorLabels" . | nindent 4 }}
+  ports:
+  # Admin web interface
+  - name: webadmin
+    port: {{ .Values.service.ports.webadmin.port }}
+    targetPort: {{ .Values.service.ports.webadmin.targetPort }}
+    protocol: {{ .Values.service.ports.webadmin.protocol }}
+  - name: webadmin-ssl
+    port: {{ .Values.service.ports.webadmin-ssl.port }}
+    targetPort: {{ .Values.service.ports.webadmin-ssl.targetPort }}
+    protocol: {{ .Values.service.ports.webadmin-ssl.protocol }}
+  
+  # IMAP ports
+  - name: imap
+    port: {{ .Values.service.ports.imap.port }}
+    targetPort: {{ .Values.service.ports.imap.targetPort }}
+    protocol: {{ .Values.service.ports.imap.protocol }}
+  - name: imaps
+    port: {{ .Values.service.ports.imaps.port }}
+    targetPort: {{ .Values.service.ports.imaps.targetPort }}
+    protocol: {{ .Values.service.ports.imaps.protocol }}
+  
+  # POP3 ports
+  - name: pop3
+    port: {{ .Values.service.ports.pop3.port }}
+    targetPort: {{ .Values.service.ports.pop3.targetPort }}
+    protocol: {{ .Values.service.ports.pop3.protocol }}
+  - name: pop3s
+    port: {{ .Values.service.ports.pop3s.port }}
+    targetPort: {{ .Values.service.ports.pop3s.targetPort }}
+    protocol: {{ .Values.service.ports.pop3s.protocol }}
+  
+  # SMTP ports
+  - name: smtp
+    port: {{ .Values.service.ports.smtp.port }}
+    targetPort: {{ .Values.service.ports.smtp.targetPort }}
+    protocol: {{ .Values.service.ports.smtp.protocol }}
+  - name: submission
+    port: {{ .Values.service.ports.submission.port }}
+    targetPort: {{ .Values.service.ports.submission.targetPort }}
+    protocol: {{ .Values.service.ports.submission.protocol }}
+  - name: smtps
+    port: {{ .Values.service.ports.smtps.port }}
+    targetPort: {{ .Values.service.ports.smtps.targetPort }}
+    protocol: {{ .Values.service.ports.smtps.protocol }}
+  
+  # Sieve port
+  - name: sieve
+    port: {{ .Values.service.ports.sieve.port }}
+    targetPort: {{ .Values.service.ports.sieve.targetPort }}
+    protocol: {{ .Values.service.ports.sieve.protocol }}
+
+---
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "stalwart-mail-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stalwart-mail-server.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "stalwart-mail-server.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.ports.webadmin.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

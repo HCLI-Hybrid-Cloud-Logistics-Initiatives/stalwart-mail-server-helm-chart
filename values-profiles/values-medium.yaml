@@ -1,0 +1,361 @@
+# Stalwart Mail Server - Medium Profile Configuration
+# For SME and enterprise departments (50-200 users)
+# PostgreSQL HA cluster, minimum 2 Stalwart instances, NetworkPolicies
+
+global:
+  profile: "medium"
+  storageClass: "default"
+
+stalwart:
+  replicaCount: 2  # Minimum for HA
+  image:
+    repository: stalwartlabs/stalwart
+    tag: "v0.12.1"
+    pullPolicy: IfNotPresent
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  persistence:
+    enabled: true
+    storageClass: ""  # Uses global.storageClass
+    accessMode: ReadWriteMany  # Required for HA
+    size: 20Gi
+  
+  configPersistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteMany  # Required for shared config
+    size: 2Gi
+  
+  # Pod Anti-Affinity (mandatory for HA)
+  affinity:
+    podAntiAffinity:
+      enabled: true
+      requiredDuringSchedulingIgnoredDuringExecution: true
+      topologyKey: "kubernetes.io/hostname"
+      # Optional: prefer different zones
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: "topology.kubernetes.io/zone"
+  
+  # Security Context (hardened)
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Service configuration
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Local
+    ports:
+      webadmin: 8080
+      webadmin_ssl: 443
+      smtp: 25
+      submission: 587
+      smtps: 465
+      imap: 143
+      imaps: 993
+      pop3: 110
+      pop3s: 995
+      sieve: 4190
+  
+  # Advanced health checks
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+    
+  readinessProbe:
+    httpGet:
+      path: /healthz/ready
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  # Priority and QoS
+  priorityClassName: "high-priority"
+  
+  # Node affinity for better placement
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 1
+      preference:
+        matchExpressions:
+        - key: "node-role.kubernetes.io/worker"
+          operator: In
+          values: ["true"]
+
+# PostgreSQL HA Configuration
+postgresql-ha:
+  enabled: true
+  
+  postgresql:
+    replicaCount: 3
+    auth:
+      enablePostgresUser: true
+      postgresPassword: ""  # Auto-generated
+      username: stalwart
+      password: ""  # Auto-generated
+      database: stalwart
+      replicationUsername: replicator
+      replicationPassword: ""  # Auto-generated
+    
+    persistence:
+      enabled: true
+      storageClass: ""
+      size: 50Gi
+    
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    
+    # Security hardening
+    securityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 999
+      fsGroup: 999
+    
+    # Pod Anti-Affinity for PostgreSQL
+    affinity:
+      podAntiAffinity:
+        type: hard
+        topologyKey: kubernetes.io/hostname
+  
+  pgpool:
+    replicaCount: 1
+    adminUsername: admin
+    adminPassword: ""  # Auto-generated
+    
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    
+    # Security hardening
+    securityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 1001
+      fsGroup: 1001
+
+# Standalone PostgreSQL (disabled when HA is enabled)
+postgresql:
+  enabled: false
+
+# Redis Configuration (disabled for medium profile)
+redis:
+  enabled: false
+
+# Network Policies (mandatory for medium profile)
+networkPolicies:
+  enabled: true
+  
+  # Default deny-all policy
+  defaultDenyAll: true
+  
+  # Allow specific communications
+  rules:
+    # Stalwart to PostgreSQL
+    - name: stalwart-to-postgresql
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: stalwart-mail
+      policyTypes:
+        - Egress
+      egress:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: postgresql-ha
+          ports:
+            - protocol: TCP
+              port: 5432
+    
+    # External traffic to Stalwart
+    - name: external-to-stalwart
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: stalwart-mail
+      policyTypes:
+        - Ingress
+      ingress:
+        - ports:
+            - protocol: TCP
+              port: 25
+            - protocol: TCP
+              port: 587
+            - protocol: TCP
+              port: 465
+            - protocol: TCP
+              port: 143
+            - protocol: TCP
+              port: 993
+            - protocol: TCP
+              port: 110
+            - protocol: TCP
+              port: 995
+            - protocol: TCP
+              port: 4190
+            - protocol: TCP
+              port: 8080
+            - protocol: TCP
+              port: 443
+
+# Pod Security Standards (enforced)
+podSecurityPolicy:
+  enabled: true
+  policy: restricted
+  enforce: true
+
+# RBAC with minimal permissions
+rbac:
+  create: true
+  serviceAccountName: stalwart-mail
+  rules:
+    - apiGroups: [""]
+      resources: ["configmaps", "secrets"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list"]
+
+# Monitoring (enabled)
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+      labels:
+        prometheus: kube-prometheus
+    
+    rules:
+      enabled: true
+      additionalLabels:
+        prometheus: kube-prometheus
+        role: alert-rules
+  
+  grafana:
+    enabled: true
+    dashboards:
+      enabled: true
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 30s
+  labels:
+    app: stalwart-mail
+
+# Ingress (optional but recommended)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: mail.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: stalwart-tls
+      hosts:
+        - mail.example.com
+
+# External Secrets (recommended for production)
+externalSecrets:
+  enabled: false
+  secretStore:
+    provider: vault  # or aws, azure, gcp
+    vault:
+      server: "https://vault.example.com"
+      path: "secret"
+      version: "v2"
+
+# Backup with Velero
+backup:
+  enabled: true
+  velero:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    ttl: "720h"  # 30 days retention
+    includeClusterResources: false
+    storageLocation: "default"
+    volumeSnapshotLocation: "default"
+    
+    # Pre-backup hooks for PostgreSQL
+    hooks:
+      postgresql:
+        enabled: true
+        command: ["pg_dumpall", "-h", "postgresql-ha-pgpool", "-U", "postgres"]
+
+# HPA (Horizontal Pod Autoscaler)
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  
+  # Scale down policy
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 50%
+
+# Priority Class
+priorityClass:
+  create: true
+  name: stalwart-high-priority
+  value: 1000
+  globalDefault: false
+  description: "High priority class for Stalwart mail server"

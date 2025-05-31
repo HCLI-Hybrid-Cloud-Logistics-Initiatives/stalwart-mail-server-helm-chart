@@ -1,0 +1,62 @@
+# Stalwart Mail Server Helm Chart
+apiVersion: v2
+name: stalwart-mail-server
+description: A production-ready Helm chart for Stalwart Mail Server with HA support
+type: application
+version: 0.1.0
+appVersion: "v0.11.8"
+home: https://stalw.art
+sources:
+  - https://github.com/stalwartlabs/mail-server
+  - https://github.com/stalwartlabs/stalwart-mail-server-helm
+maintainers:
+  - name: Stalwart Labs
+    email: support@stalw.art
+  - name: Community Contributors
+    email: community@stalw.art
+
+keywords:
+  - mail
+  - email
+  - smtp
+  - imap
+  - jmap
+  - stalwart
+  - high-availability
+
+annotations:
+  # Security annotations
+  artifacthub.io/containsSecurityUpdates: "true"
+  artifacthub.io/securityReportCreatedAt: "2025-05-31T14:23:00Z"
+  
+  # Operator annotations
+  artifacthub.io/operator: "false"
+  artifacthub.io/operatorCapabilities: Basic Install
+  
+  # Changes annotations
+  artifacthub.io/changes: |
+    - Added production-ready Helm chart
+    - Implemented 4 deployment profiles (tiny, small, medium, large)
+    - Integrated PostgreSQL HA and Redis HA dependencies
+    - Added comprehensive security hardening
+    - Implemented pod anti-affinity for true HA
+
+dependencies:
+  # PostgreSQL HA dependency (conditional)
+  - name: postgresql-ha
+    version: ~14.2.0
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql-ha.enabled
+    tags:
+      - database
+      - ha
+
+  # Redis HA dependency (conditional) 
+  - name: redis
+    version: ~20.5.0
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+    tags:
+      - cache
+      - coordination
+      - ha

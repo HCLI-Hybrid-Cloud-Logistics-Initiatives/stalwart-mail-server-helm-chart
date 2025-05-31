@@ -1,0 +1,170 @@
+# Stalwart Mail Server - Small Profile Configuration
+# For homelab and small organizations (5-50 users)
+# Single PostgreSQL instance, 1-2 Stalwart instances
+
+global:
+  profile: "small"
+  storageClass: "default"
+
+stalwart:
+  replicaCount: 1  # Can be set to 2 for HA
+  image:
+    repository: stalwartlabs/stalwart
+    tag: "v0.12.1"
+    pullPolicy: IfNotPresent
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 400m
+      memory: 1Gi
+  
+  persistence:
+    enabled: true
+    storageClass: ""  # Uses global.storageClass
+    accessMode: ReadWriteOnce  # Automatically switches to RWX if replicaCount > 1
+    size: 5Gi
+  
+  configPersistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce  # Automatically switches to RWX if replicaCount > 1
+    size: 1Gi
+  
+  # Pod Anti-Affinity (activated only if replicaCount > 1)
+  affinity:
+    podAntiAffinity:
+      enabled: true
+      requiredDuringSchedulingIgnoredDuringExecution: true
+  
+  # Security Context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  
+  # Service configuration
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Local
+    ports:
+      webadmin: 8080
+      webadmin_ssl: 443
+      smtp: 25
+      submission: 587
+      smtps: 465
+      imap: 143
+      imaps: 993
+      pop3: 110
+      pop3s: 995
+      sieve: 4190
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    
+  readinessProbe:
+    httpGet:
+      path: /healthz/ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+# PostgreSQL Configuration (standalone)
+postgresql:
+  enabled: true
+  auth:
+    enablePostgresUser: true
+    postgresPassword: ""  # Auto-generated
+    username: stalwart
+    password: ""  # Auto-generated
+    database: stalwart
+  
+  primary:
+    persistence:
+      enabled: true
+      storageClass: ""
+      size: 10Gi
+    
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    
+    # Security hardening
+    securityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 999
+      fsGroup: 999
+  
+  # Backup configuration
+  backup:
+    enabled: true
+    cronjob:
+      schedule: "0 2 * * *"  # Daily at 2 AM
+
+# Redis Configuration (disabled for small profile)
+redis:
+  enabled: false
+
+# Network Policies (optional for small profile)
+networkPolicies:
+  enabled: false
+
+# Pod Security Standards
+podSecurityPolicy:
+  enabled: true
+  policy: restricted
+
+# RBAC
+rbac:
+  create: true
+  serviceAccountName: stalwart-mail
+
+# Monitoring (basic)
+monitoring:
+  enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+
+# Ingress (optional)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+# External Secrets (optional)
+externalSecrets:
+  enabled: false
+
+# Backup with Velero (optional)
+backup:
+  enabled: false
+  velero:
+    enabled: false

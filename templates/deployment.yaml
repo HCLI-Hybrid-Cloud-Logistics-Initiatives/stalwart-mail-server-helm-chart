@@ -1,0 +1,281 @@
+{{- /* Validate configuration before proceeding */ -}}
+{{- include "stalwart-mail-server.validateConfig" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stalwart-mail-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stalwart-mail-server.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.stalwart.podAnnotations }}
+    {{- toYaml .Values.stalwart.podAnnotations | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ include "stalwart-mail-server.replicaCount" . }}
+  strategy:
+    {{- include "stalwart-mail-server.strategy" . | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "stalwart-mail-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "stalwart-mail-server.selectorLabels" . | nindent 8 }}
+        {{- with .Values.stalwart.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # Force pod restart on config changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.stalwart.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.stalwart.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "stalwart-mail-server.serviceAccountName" . }}
+      {{- if .Values.stalwart.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.stalwart.podSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.stalwart.priorityClassName }}
+      priorityClassName: {{ .Values.stalwart.priorityClassName }}
+      {{- end }}
+      {{- if .Values.stalwart.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.stalwart.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- $antiAffinityConfig := include "stalwart-mail-server.podAntiAffinity" . }}
+      {{- if $antiAffinityConfig }}
+      affinity:
+        podAntiAffinity:
+          {{- $antiAffinityConfig | nindent 10 }}
+        {{- with .Values.stalwart.affinity }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- else if .Values.stalwart.affinity }}
+      affinity:
+        {{- toYaml .Values.stalwart.affinity | nindent 8 }}
+      {{- end }}
+      {{- with .Values.stalwart.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.stalwart.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- if eq .Values.config.type "pvc" }}
+      # Initialize configuration if using PVC
+      - name: init-config
+        image: {{ .Values.stalwart.image.registry }}/{{ .Values.stalwart.image.repository }}:{{ .Values.stalwart.image.tag }}
+        imagePullPolicy: {{ .Values.stalwart.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.stalwart.securityContext | nindent 10 }}
+        command:
+        - sh
+        - -c
+        - |
+          if [ ! -f /config/config.toml ]; then
+            echo "Creating initial configuration..."
+            cp /tmp/config/config.toml /config/config.toml
+            chown 65534:65534 /config/config.toml
+            chmod 644 /config/config.toml
+          else
+            echo "Configuration already exists"
+          fi
+        volumeMounts:
+        - name: config-storage
+          mountPath: /config
+        - name: config-template
+          mountPath: /tmp/config
+          readOnly: true
+      {{- end }}
+      {{- if and (eq (include "stalwart-mail-server.postgresql-ha.enabled" .) "true") }}
+      # Wait for PostgreSQL to be ready
+      - name: wait-for-postgresql
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          {{- toYaml .Values.stalwart.securityContext | nindent 10 }}
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h {{ .Release.Name }}-postgresql-ha-pgpool -p 5432 -U {{ .Values.postgresql-ha.postgresql.username }}; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}-postgresql-ha-postgresql
+              key: password
+      {{- end }}
+      {{- if eq (include "stalwart-mail-server.redis.enabled" .) "true" }}
+      # Wait for Redis to be ready
+      - name: wait-for-redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          {{- toYaml .Values.stalwart.securityContext | nindent 10 }}
+        command:
+        - sh
+        - -c
+        - |
+          {{- if .Values.redis.sentinel.enabled }}
+          until redis-cli -h {{ .Release.Name }}-redis -p 26379 ping; do
+            echo "Waiting for Redis Sentinel..."
+            sleep 2
+          done
+          {{- else }}
+          until redis-cli -h {{ .Release.Name }}-redis-master -p 6379 ping; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+          {{- end }}
+          echo "Redis is ready!"
+      {{- end }}
+      containers:
+      - name: stalwart
+        image: {{ .Values.stalwart.image.registry }}/{{ .Values.stalwart.image.repository }}:{{ .Values.stalwart.image.tag }}
+        imagePullPolicy: {{ .Values.stalwart.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.stalwart.securityContext | nindent 10 }}
+        ports:
+        # Admin web interface
+        - name: webadmin
+          containerPort: 8080
+          protocol: TCP
+        - name: webadmin-ssl
+          containerPort: 443
+          protocol: TCP
+        # IMAP ports
+        - name: imap
+          containerPort: 143
+          protocol: TCP
+        - name: imaps
+          containerPort: 993
+          protocol: TCP
+        # POP3 ports
+        - name: pop3
+          containerPort: 110
+          protocol: TCP
+        - name: pop3s
+          containerPort: 995
+          protocol: TCP
+        # SMTP ports
+        - name: smtp
+          containerPort: 25
+          protocol: TCP
+        - name: submission
+          containerPort: 587
+          protocol: TCP
+        - name: smtps
+          containerPort: 465
+          protocol: TCP
+        # Sieve port
+        - name: sieve
+          containerPort: 4190
+          protocol: TCP
+        {{- if .Values.stalwart.livenessProbe }}
+        livenessProbe:
+          {{- toYaml .Values.stalwart.livenessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.stalwart.readinessProbe }}
+        readinessProbe:
+          {{- toYaml .Values.stalwart.readinessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.stalwart.startupProbe }}
+        startupProbe:
+          {{- toYaml .Values.stalwart.startupProbe | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- include "stalwart-mail-server.resources" . | nindent 10 }}
+        env:
+        # Cluster node ID (unique per pod)
+        - name: NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        # Pod namespace
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        # Pod IP for clustering
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        {{- with .Values.stalwart.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if eq .Values.config.type "pvc" }}
+        args:
+        - --config=/config/config.toml
+        {{- end }}
+        volumeMounts:
+        {{- if eq .Values.config.type "pvc" }}
+        # Configuration from PVC (editable via WebUI)
+        - name: config-storage
+          mountPath: /config
+        {{- else }}
+        # Configuration from ConfigMap (read-only)
+        - name: config
+          mountPath: /opt/stalwart-mail/etc/config.toml
+          subPath: config.toml
+          readOnly: true
+        {{- end }}
+        {{- if .Values.storage.pvc.enabled }}
+        # Data storage
+        - name: data-storage
+          mountPath: /opt/stalwart-mail
+        {{- end }}
+        # Temporary directory (writable)
+        - name: tmp
+          mountPath: /tmp
+        # Runtime directory (writable)
+        - name: run
+          mountPath: /run
+        # Cache directory (writable)
+        - name: cache
+          mountPath: /var/cache/stalwart
+      volumes:
+      {{- if eq .Values.config.type "pvc" }}
+      # Configuration storage (PVC for WebUI editing)
+      - name: config-storage
+        persistentVolumeClaim:
+          claimName: {{ include "stalwart-mail-server.configPvcName" . }}
+      # Configuration template
+      - name: config-template
+        configMap:
+          name: {{ include "stalwart-mail-server.configMapName" . }}
+      {{- else }}
+      # Configuration from ConfigMap
+      - name: config
+        configMap:
+          name: {{ include "stalwart-mail-server.configMapName" . }}
+      {{- end }}
+      {{- if .Values.storage.pvc.enabled }}
+      # Data storage
+      - name: data-storage
+        persistentVolumeClaim:
+          claimName: {{ include "stalwart-mail-server.dataPvcName" . }}
+      {{- end }}
+      # Temporary directories (emptyDir for security)
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: run
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: cache
+        emptyDir:
+          sizeLimit: 1Gi
