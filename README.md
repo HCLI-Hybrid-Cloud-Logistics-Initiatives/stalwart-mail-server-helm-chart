@@ -1,145 +1,148 @@
-# Stalwart Mail Server Helm Chart
+# 📬 Stalwart Mail Server Helm Chart
 
 ![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.11.8](https://img.shields.io/badge/AppVersion-v0.11.8-informational?style=flat-square)
 
-A production-ready Helm chart for Stalwart Mail Server with multi-profile deployment options for high availability and scalability.
+A production-ready Helm chart for **Stalwart Mail Server** with flexible deployment profiles for high availability and scalability 🚀
 
-## Introduction
+---
 
-[Stalwart Mail Server](https://stalw.art/) is an open-source mail server solution with SMTP, JMAP, IMAP4, and POP3 support and a wide range of modern features. It's written in Rust and aims to be secure, fast, robust, and scalable.
+## 🌐 Introduction
 
-This Helm chart provides a fully-featured deployment solution for Stalwart Mail Server on Kubernetes with customizable deployment profiles ranging from lightweight demos to production-grade high availability setups.
+[**Stalwart Mail Server**](https://stalw.art/) is a modern, open-source mail server written in Rust 🦀. It supports **SMTP, JMAP, IMAP4, and POP3** and is designed for security 🔐, speed ⚡, robustness 🛡️, and scalability 📈.
 
-## Features
+This Helm chart lets you deploy Stalwart Mail Server on Kubernetes in a breeze, with built-in support for everything from Raspberry Pi demos to enterprise-grade HA setups 💼.
 
-- **Multiple Deployment Profiles**: Choose from tiny, small, medium, or large deployment profiles to match your environment
-- **High Availability**: True HA with mandatory pod anti-affinity and rolling updates
-- **PostgreSQL HA Integration**: Optional high-availability PostgreSQL cluster with Pgpool and Repmgr
-- **Redis Coordination**: Optional Redis cluster for coordination in large deployments
-- **Comprehensive Security**: Pod Security Standards, network policies, and secure defaults
-- **Monitoring Ready**: Prometheus metrics, ServiceMonitor integration, and Grafana dashboards
-- **Autoscaling**: HPA and KEDA support for scaling based on load metrics
-- **WebUI Configuration**: Editable configuration via WebUI with PVC-based storage
+---
 
-## Architecture
+## ✨ Features
 
-This chart deploys Stalwart Mail Server with the following components:
+* 🧩 **Multiple Deployment Profiles** – tiny to large, tailored to your needs
+* 🛡️ **High Availability** – anti-affinity, rolling updates, zero-downtime upgrades
+* 🗃️ **PostgreSQL HA Integration** – includes Pgpool & Repmgr
+* 🧠 **Redis Coordination** – for caching & clustering in large deployments
+* 🔐 **Comprehensive Security** – secure-by-default, Pod Security Standards, NetworkPolicies
+* 📈 **Monitoring Ready** – Prometheus + Grafana support out of the box
+* 📊 **Autoscaling** – via HPA or KEDA
+* 🖥️ **WebUI Configuration** – config stored on PVCs, editable via WebUI
 
-- **Stalwart Mail Server**: Stateless pods that handle all mail protocols
-- **PostgreSQL HA**: Optional clustered PostgreSQL database with Pgpool-II load balancer
-- **Redis**: Optional Redis for coordination and caching in large deployments
-- **Persistent Storage**: PVCs for configuration and data storage
-- **Network Policies**: Micro-segmentation to restrict traffic between components
-- **Service**: LoadBalancer to expose mail protocols to the outside world
-- **Ingress**: Optional Ingress for the WebUI admin interface
+---
 
-## Deployment Profiles
+## 🏗️ Architecture
 
-### Tiny Profile
+This chart deploys the following components:
 
-- **Use Case**: Raspberry Pi, demos, quick testing
-- **Features**: Single instance, minimal resources, filesystem storage
-- **Resources**: 0.1-0.2 CPU, 256-512MB RAM
-- **HA**: None (single instance)
-- **PostgreSQL**: None (uses filesystem)
-- **Redis**: None
+* 📮 **Stalwart Mail Server** – stateless mail protocol pods
+* 🗄️ **PostgreSQL HA** – optional 3-node clustered backend
+* ⚡ **Redis Cluster** – optional for advanced caching/coordination
+* 💾 **Persistent Storage** – PVCs for data and config
+* 🔐 **Network Policies** – micro-segmentation for traffic control
+* 🌐 **Service** – LoadBalancer for external mail access
+* 🚪 **Ingress** – optional access to WebUI
 
-### Small Profile
+---
 
-- **Use Case**: Homelab, small organizations, personal use
-- **Features**: 1-2 instances, standalone PostgreSQL, RollingUpdate
-- **Resources**: 0.25-0.5 CPU, 512MB-1GB RAM per instance
-- **HA**: Optional (2 instances)
-- **PostgreSQL**: Optional standalone (not HA)
-- **Redis**: None
+## 🧪 Deployment Profiles
 
-### Medium Profile
+### 🐣 Tiny Profile
 
-- **Use Case**: SME, enterprise departments, organizations up to 100 users
-- **Features**: 2+ instances, PostgreSQL HA, NetworkPolicies, monitoring
-- **Resources**: 0.5-1 CPU, 1-2GB RAM per instance
-- **HA**: Required (minimum 2 instances)
-- **PostgreSQL**: HA cluster with 3 nodes
-- **Redis**: None (in-memory coordination)
+* 🔍 For: Raspberry Pi, quick demos
+* 🔧 Single instance, filesystem storage
+* 🧠 0.1–0.2 CPU, 256–512MB RAM
+* 🚫 No HA, PostgreSQL, or Redis
 
-### Large Profile
+### 🏠 Small Profile
 
-- **Use Case**: Hosting providers, critical production, SaaS platforms
-- **Features**: 3+ instances, PostgreSQL HA, Redis HA, autoscaling, comprehensive monitoring
-- **Resources**: 1-2 CPU, 2-4GB RAM per instance
-- **HA**: Required (minimum 3 instances)
-- **PostgreSQL**: HA cluster with 3 nodes
-- **Redis**: HA with replication and Sentinel
-- **Extras**: KEDA autoscaling, multi-zone distribution, backup integration
+* 🧑‍💻 For: Homelabs, small teams
+* 📦 1–2 instances, optional standalone PostgreSQL
+* 🧠 0.25–0.5 CPU, 512MB–1GB RAM
+* 🔄 Optional HA, no Redis
 
-## Prerequisites
+### 🏢 Medium Profile
 
-- Kubernetes 1.23+
-- Helm 3.8.0+
-- PV provisioner support in the underlying infrastructure
-- LoadBalancer support or MetalLB for on-premises
+* 🧑‍🤝‍🧑 For: SMEs, departments (\~100 users)
+* 💪 2+ instances, PostgreSQL HA, monitoring
+* 🧠 0.5–1 CPU, 1–2GB RAM
+* ✅ HA required, Redis optional
 
-## Getting Started
+### 🏙️ Large Profile
 
-### Add Helm Repository
+* 🌐 For: Hosting providers, SaaS, production
+* 🔥 3+ instances, HA PostgreSQL & Redis, autoscaling
+* 🧠 1–2 CPU, 2–4GB RAM
+* 🎯 KEDA, backups, multi-zone ready
+
+---
+
+## ✅ Prerequisites
+
+* ☁️ Kubernetes 1.23+
+* 🪄 Helm 3.8.0+
+* 📦 PVC provisioner support
+* 🌍 LoadBalancer support (or MetalLB for on-prem)
+
+---
+
+## 🚀 Getting Started
+
+### 📦 Add Helm Repo
 
 ```bash
 helm repo add bitnami https://charts.bitnami.com/bitnami
 ```
 
-### Install with Default Profile (Small)
+### ⚙️ Install (Default: Small Profile)
 
 ```bash
 helm install my-mail-server ./stalwart-mail-server
 ```
 
-### Install with Tiny Profile (Raspberry Pi/Demo)
+### 🐣 Tiny (Demo/Raspberry Pi)
 
 ```bash
 helm install my-mail-server ./stalwart-mail-server --values ./stalwart-mail-server/values-profiles/values-tiny.yaml
 ```
 
-### Install with Medium Profile (Enterprise)
+### 🏢 Medium (Enterprise)
 
 ```bash
 helm install my-mail-server ./stalwart-mail-server --values ./stalwart-mail-server/values-profiles/values-medium.yaml
 ```
 
-### Install with Large Profile (Hosting Provider)
+### 🏙️ Large (Production Hosting)
 
 ```bash
 helm install my-mail-server ./stalwart-mail-server --values ./stalwart-mail-server/values-profiles/values-large.yaml
 ```
 
-### Custom Installation with Override Values
+### 🛠️ Custom Overrides
 
 ```bash
-helm install my-mail-server ./stalwart-mail-server --values ./stalwart-mail-server/values-profiles/values-medium.yaml --set stalwart.replicaCount=3 --set service.type=NodePort
+helm install my-mail-server ./stalwart-mail-server \
+  --values ./stalwart-mail-server/values-profiles/values-medium.yaml \
+  --set stalwart.replicaCount=3 \
+  --set service.type=NodePort
 ```
 
-## Configuration
+---
 
-For complete configuration options, please see the [values.yaml](values.yaml) file.
+## ⚙️ Configuration
 
-### Common Configuration Parameters
+See full options in [`values.yaml`](values.yaml)
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `global.profile` | Deployment profile (tiny, small, medium, large) | `small` |
-| `stalwart.replicaCount` | Number of Stalwart instances | Profile-dependent |
-| `stalwart.resources` | CPU/Memory resource requests/limits | Profile-dependent |
-| `postgresql-ha.enabled` | Enable PostgreSQL HA | Profile-dependent |
-| `redis.enabled` | Enable Redis | Profile-dependent |
-| `storage.pvc.accessMode` | Storage access mode | Profile-dependent |
-| `storage.pvc.size` | Storage size | Profile-dependent |
-| `service.type` | Kubernetes Service type | `LoadBalancer` |
-| `security.podSecurityStandards` | Pod Security Standards level | `restricted` |
-| `security.networkPolicies.enabled` | Enable Network Policies | `true` |
-| `config.content` | Custom Stalwart configuration | See values file |
+| Parameter                       | Description               | Default            |
+| ------------------------------- | ------------------------- | ------------------ |
+| `global.profile`                | Profile name              | `small`            |
+| `stalwart.replicaCount`         | Number of replicas        | Depends on profile |
+| `stalwart.resources`            | CPU/RAM requests & limits | Profile-based      |
+| `postgresql-ha.enabled`         | Enable PostgreSQL HA      | Profile-based      |
+| `redis.enabled`                 | Enable Redis              | Profile-based      |
+| `service.type`                  | Service type              | `LoadBalancer`     |
+| `storage.pvc.size`              | Storage size              | Profile-based      |
+| `security.podSecurityStandards` | PSS level                 | `restricted`       |
 
-### Advanced Configuration
+---
 
-#### Autoscaling
+## 📈 Autoscaling Example
 
 ```yaml
 autoscaling:
@@ -150,7 +153,9 @@ autoscaling:
   targetMemoryUtilizationPercentage: 80
 ```
 
-#### Advanced Redis Configuration
+---
+
+## 🧠 Advanced Redis
 
 ```yaml
 redis:
@@ -162,18 +167,21 @@ redis:
     enabled: true
 ```
 
-#### Custom Storage Classes
+---
+
+## 💾 Custom Storage Classes
 
 ```yaml
 global:
   storageClass: "fast-ssd"
-  
 storage:
   pvc:
     storageClass: "cephfs-rwx"
 ```
 
-#### Security Customization
+---
+
+## 🔐 Security Config
 
 ```yaml
 security:
@@ -182,29 +190,27 @@ security:
     allowNamespaces:
       - monitoring
       - ingress-nginx
-  
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/my-iam-role"
 ```
 
-## Security Considerations
+---
 
-This chart implements the following security best practices:
+## 🛡️ Security Best Practices
 
-- Runs containers as non-root (UID 65534)
-- Uses read-only root filesystem
-- Drops all Linux capabilities
-- Applies Pod Security Standards (restricted by default)
-- Implements NetworkPolicies for micro-segmentation
-- Minimizes RBAC permissions
-- Disables ServiceAccount token automounting
-- Sets secure Pod Security Context
-- Enforces Pod anti-affinity for resilience
+* 🔒 Non-root containers (UID 65534)
+* 📁 Read-only root FS
+* 🚫 Dropped Linux capabilities
+* ✅ Restricted PodSecurityContext
+* 🔐 NetworkPolicies + RBAC minimization
+* 🔁 Pod anti-affinity for resilience
 
-## Monitoring & Observability
+---
 
-The chart includes Prometheus ServiceMonitor and optional Grafana dashboards:
+## 📊 Monitoring & Observability
+
+Includes Prometheus and Grafana support:
 
 ```yaml
 monitoring:
@@ -213,83 +219,81 @@ monitoring:
     namespace: monitoring
     labels:
       release: prometheus
-  
   grafana:
     enabled: true
     dashboard: true
 ```
 
-## Performance Tuning
+---
 
-For optimal performance in production environments:
+## 🚦 Troubleshooting
 
-1. Use high-performance StorageClass for PVCs
-2. Adjust PostgreSQL resources based on expected load
-3. Configure Redis for high-throughput scenarios
-4. Set appropriate CPU/memory requests and limits
-5. Enable autoscaling for dynamic workloads
-6. Use node anti-affinity to distribute across failure domains
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Pods in CrashLoopBackOff**:
-   - Check logs: `kubectl logs -l app.kubernetes.io/name=stalwart-mail-server`
-   - Verify storage: `kubectl get pvc`
-   - Check secrets: `kubectl get secrets`
-
-2. **Service not accessible**:
-   - Check LoadBalancer: `kubectl get svc`
-   - Verify NetworkPolicies: `kubectl get networkpolicy`
-
-3. **WebUI not working**:
-   - Check Ingress: `kubectl get ingress`
-   - Verify TLS: `kubectl get certificate`
-
-### Logs and Debugging
+### 🧨 CrashLoopBackOff?
 
 ```bash
-# Get all pods
-kubectl get pods -l app.kubernetes.io/name=stalwart-mail-server
-
-# Check logs
 kubectl logs -l app.kubernetes.io/name=stalwart-mail-server
+kubectl get pvc
+kubectl get secrets
+```
 
-# Get shell access
+### ❌ Can't Access Service?
+
+```bash
+kubectl get svc
+kubectl get networkpolicy
+```
+
+### 🛑 WebUI Broken?
+
+```bash
+kubectl get ingress
+kubectl get certificate
+```
+
+### 🔍 Debug Tips
+
+```bash
+kubectl get pods -l app.kubernetes.io/name=stalwart-mail-server
 kubectl exec -it deployment/my-mail-server-stalwart-mail-server -- /bin/sh
-
-# Check configuration
 kubectl exec -it deployment/my-mail-server-stalwart-mail-server -- cat /config/config.toml
 ```
 
-## Upgrade and Migration
+---
 
-To upgrade to a newer version:
+## 🔄 Upgrades & Migration
+
+### 🆙 Upgrade Chart
 
 ```bash
 helm repo update
 helm upgrade my-mail-server ./stalwart-mail-server
 ```
 
-To migrate between profiles (e.g., from small to medium):
+### 🔁 Migrate Profile
 
 ```bash
 helm upgrade my-mail-server ./stalwart-mail-server --values ./stalwart-mail-server/values-profiles/values-medium.yaml
 ```
 
-## Support and Community
+---
 
-- [Stalwart Mail Server Documentation](https://stalw.art/docs)
-- [GitHub Repository](https://github.com/stalwartlabs/mail-server)
-- [Community Forum](https://github.com/stalwartlabs/mail-server/discussions)
+## 💬 Support & Community
 
-## License
+* 📚 [Docs](https://stalw.art/docs)
+* 🧑‍💻 [GitHub](https://github.com/stalwartlabs/mail-server)
+* 💬 [Discussions](https://github.com/stalwartlabs/mail-server/discussions)
 
-This Helm chart is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full license text.
+---
 
-Stalwart Mail Server is licensed under the AGPL v3 with some features under the SELv1 license.
+## 📜 License
 
-## Contributing
+* 📦 This Helm chart: **Apache 2.0**
+* 📨 Stalwart Mail Server: **AGPL v3 / SELv1**
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+---
+
+## 🤝 Contributing
+
+PRs welcome! 💡 Help us make this chart even better 🛠️
+
+
