@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stalwart-mail-server-restrictive
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stalwart-mail-server.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "stalwart-mail-server.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 25    # SMTP
+        - protocol: TCP
+          port: 587   # Submission
+        - protocol: TCP
+          port: 465   # SMTPS
+        - protocol: TCP
+          port: 143   # IMAP
+        - protocol: TCP
+          port: 993   # IMAPS
+        - protocol: TCP
+          port: 110   # POP3
+        - protocol: TCP
+          port: 995   # POP3S
+        - protocol: TCP
+          port: 4190  # Sieve
+        - protocol: TCP
+          port: 8080  # Webadmin (à restreindre en prod)
+      from:
+        - ipBlock:
+            cidr: 0.0.0.0/0  # À restreindre selon besoin
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 53   # DNS
+        - protocol: UDP
+          port: 53   # DNS

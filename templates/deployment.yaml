@@ -37,7 +37,6 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "stalwart-mail-server.serviceAccountName" . }}
       {{- if .Values.stalwart.podSecurityContext }}
       securityContext:
         {{- toYaml .Values.stalwart.podSecurityContext | nindent 8 }}

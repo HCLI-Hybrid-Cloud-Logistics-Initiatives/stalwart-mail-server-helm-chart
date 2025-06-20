@@ -83,8 +83,8 @@ stalwart:
     httpGet:
       path: /healthz/live
       port: 8080
-    initialDelaySeconds: 60
-    periodSeconds: 15
+    initialDelaySeconds: 30
+    periodSeconds: 10
     timeoutSeconds: 10
     failureThreshold: 3
     
@@ -92,8 +92,8 @@ stalwart:
     httpGet:
       path: /healthz/ready
       port: 8080
-    initialDelaySeconds: 10
-    periodSeconds: 5
+    initialDelaySeconds: 5
+    periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 3
   

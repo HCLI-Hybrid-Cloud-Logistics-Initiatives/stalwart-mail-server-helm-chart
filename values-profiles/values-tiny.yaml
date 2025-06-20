@@ -60,20 +60,20 @@ stalwart:
   # Basic health checks (corrected paths)
   livenessProbe:
     httpGet:
-      path: /admin
+      path: /healthz/live
       port: 8080
     initialDelaySeconds: 30
-    periodSeconds: 30
+    periodSeconds: 10
     timeoutSeconds: 10
     failureThreshold: 3
     successThreshold: 1
     
   readinessProbe:
     httpGet:
-      path: /admin
+      path: /healthz/ready
       port: 8080
-    initialDelaySeconds: 10
-    periodSeconds: 15
+    initialDelaySeconds: 5
+    periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 3
     successThreshold: 1
