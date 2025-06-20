@@ -41,6 +41,9 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: stalwart-mail-server
+{{- if .Values.global.profile }}
+stalwart.io/profile: {{ .Values.global.profile }}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -55,10 +58,10 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "stalwart-mail-server.serviceAccountName" -}}
-{{- if .Values.security.serviceAccount.create }}
-{{- default (include "stalwart-mail-server.fullname" .) .Values.security.serviceAccount.name }}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "stalwart-mail-server.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.security.serviceAccount.name }}
+{{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
 
@@ -91,62 +94,32 @@ Create the name of the configmap
 {{- end }}
 
 {{/*
-Get the profile configuration
-*/}}
-{{- define "stalwart-mail-server.profileConfig" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- toYaml $profileConfig }}
-{{- end }}
-
-{{/*
-Get replica count based on profile
+Get replica count (simplified - uses direct values)
 */}}
 {{- define "stalwart-mail-server.replicaCount" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- if $profileConfig.stalwart.replicaCount }}
-{{- $profileConfig.stalwart.replicaCount }}
-{{- else }}
 {{- .Values.stalwart.replicaCount }}
 {{- end }}
-{{- end }}
 
 {{/*
-Get deployment strategy based on profile
+Get deployment strategy (simplified - uses direct values)
 */}}
 {{- define "stalwart-mail-server.strategy" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- if $profileConfig.stalwart.strategy }}
-{{- toYaml $profileConfig.stalwart.strategy }}
-{{- else }}
 {{- toYaml .Values.stalwart.strategy }}
 {{- end }}
-{{- end }}
 
 {{/*
-Get resources based on profile
+Get resources (simplified - uses direct values)
 */}}
 {{- define "stalwart-mail-server.resources" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- if $profileConfig.stalwart.resources }}
-{{- toYaml $profileConfig.stalwart.resources }}
-{{- else }}
 {{- toYaml .Values.stalwart.resources }}
-{{- end }}
 {{- end }}
 
 {{/*
-Get anti-affinity configuration based on profile
+Get pod anti-affinity configuration
 */}}
 {{- define "stalwart-mail-server.podAntiAffinity" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- $antiAffinity := $profileConfig.stalwart.podAntiAffinity | default .Values.stalwart.podAntiAffinity }}
-{{- if $antiAffinity.enabled }}
-{{- if eq $antiAffinity.type "requiredDuringSchedulingIgnoredDuringExecution" }}
+{{- if .Values.stalwart.podAntiAffinity.enabled }}
+{{- if eq .Values.stalwart.podAntiAffinity.type "requiredDuringSchedulingIgnoredDuringExecution" }}
 requiredDuringSchedulingIgnoredDuringExecution:
 - labelSelector:
     matchExpressions:
@@ -158,10 +131,10 @@ requiredDuringSchedulingIgnoredDuringExecution:
       operator: In
       values:
       - {{ .Release.Name }}
-  topologyKey: {{ $antiAffinity.topologyKey | default "kubernetes.io/hostname" }}
-{{- else if eq $antiAffinity.type "preferredDuringSchedulingIgnoredDuringExecution" }}
+  topologyKey: {{ .Values.stalwart.podAntiAffinity.topologyKey | default "kubernetes.io/hostname" }}
+{{- else if eq .Values.stalwart.podAntiAffinity.type "preferredDuringSchedulingIgnoredDuringExecution" }}
 preferredDuringSchedulingIgnoredDuringExecution:
-- weight: {{ $antiAffinity.weight | default 100 }}
+- weight: {{ .Values.stalwart.podAntiAffinity.weight | default 100 }}
   podAffinityTerm:
     labelSelector:
       matchExpressions:
@@ -173,48 +146,23 @@ preferredDuringSchedulingIgnoredDuringExecution:
         operator: In
         values:
         - {{ .Release.Name }}
-    topologyKey: {{ $antiAffinity.topologyKey | default "kubernetes.io/hostname" }}
+    topologyKey: {{ .Values.stalwart.podAntiAffinity.topologyKey | default "kubernetes.io/hostname" }}
 {{- end }}
 {{- end }}
 {{- end }}
 
 {{/*
-Get storage configuration based on profile
-*/}}
-{{- define "stalwart-mail-server.storageConfig" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- if $profileConfig.storage }}
-{{- toYaml $profileConfig.storage }}
-{{- else }}
-{{- toYaml .Values.storage }}
-{{- end }}
-{{- end }}
-
-{{/*
-Check if PostgreSQL HA is enabled based on profile
+Check if PostgreSQL HA is enabled
 */}}
 {{- define "stalwart-mail-server.postgresql-ha.enabled" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- if hasKey $profileConfig "postgresql-ha" }}
-{{- $profileConfig.postgresql-ha.enabled }}
-{{- else }}
-{{- .Values.postgresql-ha.enabled }}
-{{- end }}
+{{- index .Values "postgresql-ha" "enabled" }}
 {{- end }}
 
 {{/*
-Check if Redis is enabled based on profile
+Check if Redis is enabled
 */}}
 {{- define "stalwart-mail-server.redis.enabled" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- $profileConfig := index .Values.profiles $profile }}
-{{- if hasKey $profileConfig "redis" }}
-{{- $profileConfig.redis.enabled }}
-{{- else }}
 {{- .Values.redis.enabled }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -222,9 +170,11 @@ Get PostgreSQL connection string
 */}}
 {{- define "stalwart-mail-server.postgresql.connectionString" -}}
 {{- if eq (include "stalwart-mail-server.postgresql-ha.enabled" .) "true" }}
-{{- printf "postgresql://%s:%s@%s-postgresql-ha-pgpool:5432/%s" .Values.postgresql-ha.postgresql.username .Values.postgresql-ha.postgresql.password .Release.Name .Values.postgresql-ha.postgresql.database }}
+{{- $username := index .Values "postgresql-ha" "postgresql" "auth" "username" | default "stalwart" }}
+{{- $database := index .Values "postgresql-ha" "postgresql" "auth" "database" | default "stalwart" }}
+{{- printf "postgresql://%s:${POSTGRES_PASSWORD}@%s-postgresql-ha-pgpool:5432/%s" $username .Release.Name $database }}
 {{- else }}
-{{- printf "postgresql://stalwart:stalwart@localhost:5432/stalwart" }}
+{{- printf "postgresql://stalwart:${POSTGRES_PASSWORD}@localhost:5432/stalwart" }}
 {{- end }}
 {{- end }}
 
@@ -244,7 +194,7 @@ Get Redis connection string
 {{- end }}
 
 {{/*
-Generate Stalwart configuration based on profile and dependencies
+Generate Stalwart configuration based on dependencies
 */}}
 {{- define "stalwart-mail-server.configuration" -}}
 [server]
@@ -310,88 +260,27 @@ type = "memory"
 {{- end }}
 
 {{/*
-Generate network policy rules
+Generate image name with tag
 */}}
-{{- define "stalwart-mail-server.networkPolicyRules" -}}
-ingress:
-{{- if not .Values.security.networkPolicies.denyAll }}
-- {}
+{{- define "stalwart-mail-server.image" -}}
+{{- $registry := .Values.stalwart.image.registry | default .Values.global.imageRegistry }}
+{{- $repository := .Values.stalwart.image.repository }}
+{{- $tag := .Values.stalwart.image.tag | default .Chart.AppVersion }}
+{{- if $registry }}
+{{- printf "%s/%s:%s" $registry $repository $tag }}
 {{- else }}
-# Allow traffic from same namespace
-- from:
-  - namespaceSelector:
-      matchLabels:
-        name: {{ .Release.Namespace }}
-{{- if .Values.security.networkPolicies.allowNamespaces }}
-# Allow traffic from specific namespaces
-{{- range .Values.security.networkPolicies.allowNamespaces }}
-- from:
-  - namespaceSelector:
-      matchLabels:
-        name: {{ . }}
+{{- printf "%s:%s" $repository $tag }}
 {{- end }}
 {{- end }}
-# Allow mail traffic on standard ports
-- ports:
-  - protocol: TCP
-    port: 25
-  - protocol: TCP
-    port: 143
-  - protocol: TCP
-    port: 587
-  - protocol: TCP
-    port: 993
-  - protocol: TCP
-    port: 995
-  - protocol: TCP
-    port: 465
-  - protocol: TCP
-    port: 110
-  - protocol: TCP
-    port: 4190
-# Allow admin interface
-- ports:
-  - protocol: TCP
-    port: 8080
-  - protocol: TCP
-    port: 443
-{{- if eq (include "stalwart-mail-server.postgresql-ha.enabled" .) "true" }}
-# Allow PostgreSQL traffic
-- from:
-  - podSelector:
-      matchLabels:
-        app.kubernetes.io/name: postgresql-ha
-  ports:
-  - protocol: TCP
-    port: 5432
-{{- end }}
-{{- if eq (include "stalwart-mail-server.redis.enabled" .) "true" }}
-# Allow Redis traffic
-- from:
-  - podSelector:
-      matchLabels:
-        app.kubernetes.io/name: redis
-  ports:
-  - protocol: TCP
-    port: 6379
-  - protocol: TCP
-    port: 26379
-{{- end }}
-{{- end }}
-egress:
-- {}
-{{- end }}
-
 {{/*
 Validate configuration
 */}}
 {{- define "stalwart-mail-server.validateConfig" -}}
-{{- $profile := .Values.global.profile | default "small" }}
-{{- if not (has $profile (list "tiny" "small" "medium" "large")) }}
-{{- fail (printf "Invalid profile '%s'. Must be one of: tiny, small, medium, large" $profile) }}
-{{- end }}
-{{- $replicaCount := include "stalwart-mail-server.replicaCount" . | int }}
-{{- if and (gt $replicaCount 1) (eq .Values.storage.pvc.accessMode "ReadWriteOnce") }}
-{{- fail "Cannot use ReadWriteOnce access mode with multiple replicas. Use ReadWriteMany instead." }}
-{{- end }}
+{{- /* Configuration validation can be added here */ -}}
+{{- if not .Values.config.hostname -}}
+{{- fail "config.hostname is required" -}}
+{{- end -}}
+{{- if not .Values.stalwart.image.repository -}}
+{{- fail "stalwart.image.repository is required" -}}
+{{- end -}}
 {{- end }}

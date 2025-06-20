@@ -2,6 +2,10 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# ✅ Ajout des valeurs manquantes pour les helpers
+nameOverride: ""
+fullnameOverride: ""
+
 # Global configuration
 global:
   # Deployment profile: tiny, small, medium, large
@@ -21,7 +25,7 @@ stalwart:
   # Image configuration
   image:
     registry: docker.io
-    repository: stalwartlabs/stalwart
+    repository: stalwartlabs/mail-server
     tag: "v0.11.8"
     pullPolicy: IfNotPresent
     pullSecrets: []
@@ -39,11 +43,6 @@ stalwart:
   # Minimum replicas for HA (used in medium/large profiles)
   minReplicas: 2
   maxReplicas: 10
-
-  # Pod disruption budget
-  podDisruptionBudget:
-    enabled: true
-    minAvailable: 1
 
   # Pod anti-affinity configuration
   podAntiAffinity:
@@ -70,12 +69,13 @@ stalwart:
     runAsNonRoot: true
     runAsUser: 65534
     runAsGroup: 65534
-    fsGroup: 65534
     allowPrivilegeEscalation: false
     capabilities:
       drop:
         - ALL
     readOnlyRootFilesystem: true
+    seccompProfile:
+      type: RuntimeDefault
 
   # Pod security context
   podSecurityContext:
@@ -89,7 +89,7 @@ stalwart:
   # Liveness probe
   livenessProbe:
     httpGet:
-      path: /healthz/live
+      path: /admin
       port: 8080
     initialDelaySeconds: 30
     periodSeconds: 10
@@ -100,7 +100,7 @@ stalwart:
   # Readiness probe
   readinessProbe:
     httpGet:
-      path: /healthz/ready
+      path: /admin
       port: 8080
     initialDelaySeconds: 5
     periodSeconds: 10
@@ -111,7 +111,7 @@ stalwart:
   # Startup probe
   startupProbe:
     httpGet:
-      path: /healthz/ready
+      path: /admin
       port: 8080
     initialDelaySeconds: 10
     periodSeconds: 10
@@ -140,7 +140,46 @@ stalwart:
   # Pod labels
   podLabels: {}
 
-# Storage configuration
+  # ✅ Persistence configuration (moved under stalwart)
+  persistence:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    storageClass: ""
+    annotations: {}
+
+  # ✅ Config persistence configuration (moved under stalwart)
+  configPersistence:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    storageClass: ""
+    annotations: {}
+
+  # Basic Stalwart configuration
+  config:
+    jmap:
+      maxObjectsInGet: 500
+      maxObjectsInSet: 250
+      pushEnabled: true
+    
+    smtp:
+      maxMessageSize: 26214400  # 25MB
+      maxRecipients: 50
+      maxConnections: 25
+      maxAuthAttempts: 3
+    
+    imap:
+      maxConnections: 200
+      idleTimeout: 1800  # 30 minutes
+      maxAuthAttempts: 3
+    
+    security:
+      minTlsVersion: "TLSv1.2"
+      preferServerCiphers: true
+      authFailDelay: 2  # seconds
+
+# ✅ Storage configuration (for PVC template compatibility)
 storage:
   # Storage type: pvc or blob
   type: "pvc"
@@ -188,7 +227,7 @@ service:
       port: 8080
       targetPort: 8080
       protocol: TCP
-    webadmin-ssl:
+    webadmin_ssl:
       port: 443
       targetPort: 443
       protocol: TCP
@@ -250,6 +289,12 @@ config:
   # Configuration management type: configmap or pvc
   type: "pvc"
   
+  # Hostname for the mail server
+  hostname: "mail.example.com"
+  
+  # Node ID for clustering
+  nodeId: 1
+  
   # Configuration content (basic template)
   content: |
     [server]
@@ -270,34 +315,6 @@ config:
     [store."lookup"]
     type = "postgresql"
 
-# Security configuration
-security:
-  # Pod Security Standards level: privileged, baseline, restricted
-  podSecurityStandards: "restricted"
-  
-  # Network policies
-  networkPolicies:
-    enabled: true
-    # Default deny all ingress
-    denyAll: true
-    # Allow ingress from specific namespaces
-    allowNamespaces: []
-    # Custom network policies
-    custom: []
-
-  # Service account
-  serviceAccount:
-    create: true
-    name: ""
-    annotations: {}
-    automountServiceAccountToken: false
-
-  # RBAC
-  rbac:
-    create: true
-    # Custom rules
-    rules: []
-
 # PostgreSQL HA configuration (Bitnami chart)
 postgresql-ha:
   enabled: false
@@ -305,11 +322,11 @@ postgresql-ha:
   # PostgreSQL configuration
   postgresql:
     replicaCount: 3
-    database: stalwart
-    username: stalwart
-    password: ""
-    existingSecret: ""
-    syncReplication: true
+    auth:
+      database: stalwart
+      username: stalwart
+      password: ""
+      existingSecret: ""
     
     # Resource requirements
     resources:
@@ -408,11 +425,40 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Network Policies
+networkPolicies:
+  enabled: false
+
+# RBAC
+rbac:
+  create: true
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Security configuration
+security:
+  # Pod Security Standards level: privileged, baseline, restricted
+  podSecurityStandards: "restricted"
   
-  # KEDA configuration for advanced autoscaling
-  keda:
-    enabled: false
-    triggers: []
+  # Network policies
+  networkPolicies:
+    enabled: true
+    # Default deny all ingress
+    denyAll: true
+    # Allow ingress from specific namespaces
+    allowNamespaces: []
+    # Custom network policies
+    custom: []
 
 # Backup configuration
 backup:
@@ -434,151 +480,3 @@ backup:
 
 # Extra resources to be created
 extraResources: []
-
-# Profile-specific configurations will override these defaults
-profiles:
-  tiny:
-    # Minimal resources for demo/RPI
-    stalwart:
-      replicaCount: 1
-      strategy:
-        type: Recreate
-      resources:
-        limits:
-          cpu: 200m
-          memory: 512Mi
-        requests:
-          cpu: 100m
-          memory: 256Mi
-      podAntiAffinity:
-        enabled: false
-    
-    storage:
-      pvc:
-        accessMode: "ReadWriteOnce"
-        size: "5Gi"
-        config:
-          enabled: false
-      blob:
-        enabled: true
-    
-    postgresql-ha:
-      enabled: false
-    
-    redis:
-      enabled: false
-
-  small:
-    # Homelab/small organization
-    stalwart:
-      replicaCount: 1
-      resources:
-        limits:
-          cpu: 500m
-          memory: 1Gi
-        requests:
-          cpu: 250m
-          memory: 512Mi
-      podAntiAffinity:
-        enabled: false
-    
-    storage:
-      pvc:
-        accessMode: "ReadWriteOnce"
-        size: "10Gi"
-        config:
-          enabled: true
-          accessMode: "ReadWriteMany"
-    
-    postgresql-ha:
-      enabled: false
-    
-    redis:
-      enabled: false
-
-  medium:
-    # SME/enterprise
-    stalwart:
-      replicaCount: 2
-      resources:
-        limits:
-          cpu: 1000m
-          memory: 2Gi
-        requests:
-          cpu: 500m
-          memory: 1Gi
-      podAntiAffinity:
-        enabled: true
-        type: "requiredDuringSchedulingIgnoredDuringExecution"
-    
-    storage:
-      pvc:
-        accessMode: "ReadWriteMany"
-        size: "20Gi"
-        config:
-          enabled: true
-          accessMode: "ReadWriteMany"
-    
-    postgresql-ha:
-      enabled: true
-    
-    redis:
-      enabled: false
-    
-    monitoring:
-      serviceMonitor:
-        enabled: true
-
-  large:
-    # Hosting providers/critical production
-    stalwart:
-      replicaCount: 3
-      resources:
-        limits:
-          cpu: 2000m
-          memory: 4Gi
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-      podAntiAffinity:
-        enabled: true
-        type: "requiredDuringSchedulingIgnoredDuringExecution"
-    
-    storage:
-      pvc:
-        accessMode: "ReadWriteMany"
-        size: "50Gi"
-        config:
-          enabled: true
-          accessMode: "ReadWriteMany"
-    
-    postgresql-ha:
-      enabled: true
-      postgresql:
-        replicaCount: 3
-        resources:
-          limits:
-            cpu: 2000m
-            memory: 4Gi
-          requests:
-            cpu: 1000m
-            memory: 2Gi
-      persistence:
-        size: 100Gi
-    
-    redis:
-      enabled: true
-      architecture: replication
-      replica:
-        replicaCount: 2
-      sentinel:
-        enabled: true
-    
-    monitoring:
-      serviceMonitor:
-        enabled: true
-    
-    autoscaling:
-      enabled: true
-      minReplicas: 3
-      maxReplicas: 10

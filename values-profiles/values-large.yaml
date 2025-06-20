@@ -1,20 +1,17 @@
 # Stalwart Mail Server - Large Profile Configuration
 # For hosting providers and critical infrastructure (200+ users)
-# PostgreSQL HA cluster, Redis HA, 3+ Stalwart instances, HPA + KEDA
+# PostgreSQL HA cluster, Redis HA, 3+ Stalwart instances, HPA
 
 global:
   profile: "large"
   storageClass: "fast-ssd"  # High-performance storage recommended
-  # Multi-zone deployment
-  multiZone:
-    enabled: true
 
 stalwart:
   # Minimum 3 replicas for HA across zones
   replicaCount: 3
   image:
-    repository: stalwartlabs/stalwart
-    tag: "v0.12.1"
+    repository: stalwartlabs/mail-server
+    tag: "v0.11.8"
     pullPolicy: IfNotPresent
   
   # Advanced RollingUpdate strategy
@@ -36,32 +33,26 @@ stalwart:
   # Persistence with high-performance storage
   persistence:
     enabled: true
-    storageClass: ""  # Uses global.storageClass
-    accessMode: ReadWriteMany  # Required for HA
+    storageClass: "fast-ssd"
+    accessMode: ReadWriteOnce
     size: 50Gi
     annotations:
       backup.velero.io/backup-volumes: "data"
   
-  # Config persistence with RWX
+  # Config persistence
   configPersistence:
     enabled: true
-    storageClass: ""
-    accessMode: ReadWriteMany  # Required for shared config
+    storageClass: "fast-ssd"
+    accessMode: ReadWriteOnce
     size: 5Gi
     annotations:
       backup.velero.io/backup-volumes: "config"
   
-  # Multi-zone pod anti-affinity (strict requirements)
-  affinity:
-    podAntiAffinity:
-      enabled: true
-      requiredDuringSchedulingIgnoredDuringExecution: true
-      topologyKey: "kubernetes.io/hostname"
-      # Spread across zones
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            topologyKey: "topology.kubernetes.io/zone"
+  # Pod anti-affinity (strict requirements)
+  podAntiAffinity:
+    enabled: true
+    type: "requiredDuringSchedulingIgnoredDuringExecution"
+    topologyKey: "kubernetes.io/hostname"
   
   # Enhanced security context
   securityContext:
@@ -75,30 +66,10 @@ stalwart:
     seccompProfile:
       type: RuntimeDefault
   
-  # Service configuration with annotations for IP stability
-  service:
-    type: LoadBalancer
-    externalTrafficPolicy: Local
-    # Preserve client IPs
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: nlb
-      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
-    ports:
-      webadmin: 8080
-      webadmin_ssl: 443
-      smtp: 25
-      submission: 587
-      smtps: 465
-      imap: 143
-      imaps: 993
-      pop3: 110
-      pop3s: 995
-      sieve: 4190
-  
   # Production-grade health checks
   livenessProbe:
     httpGet:
-      path: /healthz/live
+      path: /admin
       port: 8080
     initialDelaySeconds: 90
     periodSeconds: 20
@@ -108,7 +79,7 @@ stalwart:
     
   readinessProbe:
     httpGet:
-      path: /healthz/ready
+      path: /admin
       port: 8080
     initialDelaySeconds: 15
     periodSeconds: 5
@@ -119,7 +90,7 @@ stalwart:
   # Startup probe for slow initializations
   startupProbe:
     httpGet:
-      path: /healthz/ready
+      path: /admin
       port: 8080
     initialDelaySeconds: 30
     periodSeconds: 10
@@ -127,28 +98,8 @@ stalwart:
     failureThreshold: 30
     successThreshold: 1
   
-  # Advanced topology spread constraints
-  topologySpreadConstraints:
-    enabled: true
-    constraints:
-      - maxSkew: 1
-        topologyKey: topology.kubernetes.io/zone
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/name: stalwart-mail
-  
-  # Priority and QoS
-  priorityClassName: "critical-service"
-  
-  # Configuration for Redis integration
-  redisIntegration:
-    enabled: true
-    prefix: "stalwart:"
-    keyExpiration: 604800  # 1 week in seconds
-  
-  # Advanced production settings
-  advancedSettings:
+  # Advanced configuration
+  config:
     jmap:
       maxObjectsInGet: 1000
       maxObjectsInSet: 500
@@ -157,10 +108,8 @@ stalwart:
     smtp:
       maxMessageSize: 52428800  # 50MB
       maxRecipients: 100
-      rateLimit:
-        enabled: true
-        maxConnections: 50
-        maxAuthAttempts: 5
+      maxConnections: 50
+      maxAuthAttempts: 5
     
     imap:
       maxConnections: 1000
@@ -168,11 +117,59 @@ stalwart:
       maxAuthAttempts: 5
     
     security:
-      tls:
-        minVersion: "TLSv1.2"
-        preferServerCiphers: true
-      authentication:
-        failDelay: 3  # seconds
+      minTlsVersion: "TLSv1.2"
+      preferServerCiphers: true
+      authFailDelay: 3  # seconds
+
+# Service configuration with LoadBalancer
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+  ports:
+    webadmin:
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    webadmin_ssl:
+      port: 443
+      protocol: TCP
+      targetPort: 443
+    smtp:
+      port: 25
+      protocol: TCP
+      targetPort: 25
+    submission:
+      port: 587
+      protocol: TCP
+      targetPort: 587
+    smtps:
+      port: 465
+      protocol: TCP
+      targetPort: 465
+    imap:
+      port: 143
+      protocol: TCP
+      targetPort: 143
+    imaps:
+      port: 993
+      protocol: TCP
+      targetPort: 993
+    pop3:
+      port: 110
+      protocol: TCP
+      targetPort: 110
+    pop3s:
+      port: 995
+      protocol: TCP
+      targetPort: 995
+    sieve:
+      port: 4190
+      protocol: TCP
+      targetPort: 4190
+
 
 # PostgreSQL HA Configuration (production-grade)
 postgresql-ha:
@@ -191,7 +188,7 @@ postgresql-ha:
     
     persistence:
       enabled: true
-      storageClass: ""  # Uses global.storageClass
+      storageClass: "fast-ssd"
       size: 100Gi
       annotations:
         backup.velero.io/backup-volumes: "data"
@@ -205,43 +202,37 @@ postgresql-ha:
         memory: 4Gi
     
     # Advanced PostgreSQL configuration
-    configuration: |
-      max_connections = 500
-      shared_buffers = 1GB
-      effective_cache_size = 3GB
-      maintenance_work_mem = 256MB
-      checkpoint_completion_target = 0.9
-      wal_buffers = 16MB
-      default_statistics_target = 100
-      random_page_cost = 1.1
-      effective_io_concurrency = 200
-      work_mem = 4MB
-      min_wal_size = 1GB
-      max_wal_size = 4GB
+    postgresql:
+      maxConnections: "500"
+      sharedBuffers: "1GB"
+      effectiveCacheSize: "3GB"
+      maintenanceWorkMem: "256MB"
+      checkpointCompletionTarget: "0.9"
+      walBuffers: "16MB"
+      defaultStatisticsTarget: "100"
+      randomPageCost: "1.1"
+      effectiveIoCanurrency: "200"
+      workMem: "4MB"
+      minWalSize: "1GB"
+      maxWalSize: "4GB"
     
     # Security hardening
-    securityContext:
+    containerSecurityContext:
       enabled: true
       runAsNonRoot: true
       runAsUser: 999
-      fsGroup: 999
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
     
-    # Pod Anti-Affinity for PostgreSQL (multi-zone)
+    # Pod Anti-Affinity for PostgreSQL
     affinity:
       podAntiAffinity:
         type: hard
         topologyKey: kubernetes.io/hostname
-      nodeAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            preference:
-              matchExpressions:
-                - key: topology.kubernetes.io/zone
-                  operator: In
-                  values:
-                    - us-east-1a
-                    - us-east-1b
-                    - us-east-1c
   
   pgpool:
     replicaCount: 2  # HA Pgpool
@@ -263,24 +254,16 @@ postgresql-ha:
         topologyKey: kubernetes.io/hostname
     
     # Security hardening
-    securityContext:
+    containerSecurityContext:
       enabled: true
       runAsNonRoot: true
       runAsUser: 1001
-      fsGroup: 1001
-    
-    # Pgpool configuration
-    configuration: |
-      num_init_children = 32
-      max_pool = 4
-      connection_life_time = 900
-      client_idle_limit = 600
-      connection_cache = on
-      load_balance_mode = on
-
-# Standalone PostgreSQL (disabled when HA is enabled)
-postgresql:
-  enabled: false
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
 
 # Redis HA Configuration
 redis:
@@ -293,7 +276,7 @@ redis:
   master:
     persistence:
       enabled: true
-      storageClass: ""  # Uses global.storageClass
+      storageClass: "fast-ssd"
       size: 10Gi
     
     resources:
@@ -305,17 +288,22 @@ redis:
         memory: 2Gi
     
     # Security hardening
-    securityContext:
+    containerSecurityContext:
       enabled: true
       runAsNonRoot: true
       runAsUser: 1001
-      fsGroup: 1001
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
   
   replica:
     replicaCount: 2
     persistence:
       enabled: true
-      storageClass: ""  # Uses global.storageClass
+      storageClass: "fast-ssd"
       size: 10Gi
     
     resources:
@@ -327,11 +315,16 @@ redis:
         memory: 1Gi
     
     # Security hardening
-    securityContext:
+    containerSecurityContext:
       enabled: true
       runAsNonRoot: true
       runAsUser: 1001
-      fsGroup: 1001
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
   
   # Redis Sentinel for HA
   sentinel:
@@ -339,217 +332,43 @@ redis:
     masterSet: "mymaster"
     quorum: 2
 
-# Network Policies (enforced)
-networkPolicies:
-  enabled: true
-  
-  # Default deny-all policy
-  defaultDenyAll: true
-  
-  # Allow specific communications
-  rules:
-    # Stalwart to PostgreSQL
-    - name: stalwart-to-postgresql
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: stalwart-mail
-      policyTypes:
-        - Egress
-      egress:
-        - to:
-            - podSelector:
-                matchLabels:
-                  app.kubernetes.io/name: postgresql-ha
-          ports:
-            - protocol: TCP
-              port: 5432
-    
-    # Stalwart to Redis
-    - name: stalwart-to-redis
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: stalwart-mail
-      policyTypes:
-        - Egress
-      egress:
-        - to:
-            - podSelector:
-                matchLabels:
-                  app.kubernetes.io/name: redis
-          ports:
-            - protocol: TCP
-              port: 6379
-            - protocol: TCP
-              port: 26379  # Sentinel
-    
-    # External traffic to Stalwart
-    - name: external-to-stalwart
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: stalwart-mail
-      policyTypes:
-        - Ingress
-      ingress:
-        - ports:
-            - protocol: TCP
-              port: 25
-            - protocol: TCP
-              port: 587
-            - protocol: TCP
-              port: 465
-            - protocol: TCP
-              port: 143
-            - protocol: TCP
-              port: 993
-            - protocol: TCP
-              port: 110
-            - protocol: TCP
-              port: 995
-            - protocol: TCP
-              port: 4190
-            - protocol: TCP
-              port: 8080
-            - protocol: TCP
-              port: 443
-
-# Pod Security Standards (enforced)
-podSecurityPolicy:
-  enabled: true
-  policy: restricted
-  enforce: true
-
-# RBAC with minimal permissions
-rbac:
-  create: true
-  serviceAccountName: stalwart-mail
-  rules:
-    - apiGroups: [""]
-      resources: ["configmaps", "secrets"]
-      verbs: ["get", "list", "watch"]
-    - apiGroups: [""]
-      resources: ["pods", "services"]
-      verbs: ["get", "list"]
-    - apiGroups: [""]
-      resources: ["events"]
-      verbs: ["create", "patch"]
-    - apiGroups: ["coordination.k8s.io"]
-      resources: ["leases"]
-      verbs: ["get", "create", "update"]
-
-# Monitoring (comprehensive)
-monitoring:
-  enabled: true
-  prometheus:
-    enabled: true
-    serviceMonitor:
-      enabled: true
-      interval: 15s
-      scrapeTimeout: 10s
-      labels:
-        prometheus: kube-prometheus
-    
-    rules:
-      enabled: true
-      additionalLabels:
-        prometheus: kube-prometheus
-        role: alert-rules
-      rules:
-        # Mail-specific alerting rules
-        - alert: StalwartHighErrorRate
-          expr: rate(stalwart_errors_total[5m]) > 0.05
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "High error rate in Stalwart Mail"
-            description: "Stalwart Mail error rate is above 5% for the last 10 minutes"
-        
-        - alert: StalwartHighLatency
-          expr: histogram_quantile(0.95, rate(stalwart_request_duration_seconds_bucket[5m])) > 2
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "High latency in Stalwart Mail"
-            description: "95th percentile latency is above 2 seconds for the last 10 minutes"
-  
-  grafana:
-    enabled: true
-    dashboards:
-      enabled: true
-    
-    # Predefined dashboards
-    dashboardsConfigMaps:
-      - name: stalwart-mail-dashboard
-        label: grafana_dashboard
-  
-  # Metrics collection for KEDA
-  kedaMetrics:
-    enabled: true
-    metricNames:
-      - "stalwart_smtp_queue_length"
-      - "stalwart_active_connections"
-      - "stalwart_imap_connections"
-      - "stalwart_smtp_connections"
-
-# Service Monitor for Prometheus
-serviceMonitor:
-  enabled: true
-  namespace: monitoring
-  interval: 15s
-  labels:
-    app: stalwart-mail
-
-# KEDA ScaledObjects (for advanced autoscaling)
-keda:
-  enabled: true
-  scaledobjects:
-    # Scale based on SMTP queue length
-    - name: smtp-queue-scaler
-      minReplicaCount: 3
-      maxReplicaCount: 10
-      pollingInterval: 30
-      cooldownPeriod: 300
-      triggers:
-        - type: prometheus
-          metadata:
-            serverAddress: http://prometheus-operated.monitoring.svc.cluster.local:9090
-            metricName: stalwart_smtp_queue_length
-            threshold: "100"
-            query: sum(stalwart_smtp_queue_length)
-    
-    # Scale based on active connections
-    - name: connections-scaler
-      minReplicaCount: 3
-      maxReplicaCount: 10
-      pollingInterval: 30
-      cooldownPeriod: 300
-      triggers:
-        - type: prometheus
-          metadata:
-            serverAddress: http://prometheus-operated.monitoring.svc.cluster.local:9090
-            metricName: stalwart_active_connections
-            threshold: "500"
-            query: sum(stalwart_active_connections)
-
-# HPA (Standard Horizontal Pod Autoscaler)
+# HPA (Horizontal Pod Autoscaler)
 autoscaling:
   enabled: true
   minReplicas: 3
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-  
-  # Scale down policy
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 600
-      policies:
-      - type: Pods
-        value: 1
-        periodSeconds: 300
 
-# Ingress with TLS and security
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Network Policies
+networkPolicies:
+  enabled: true
+
+# RBAC
+rbac:
+  create: true
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    labels:
+      app: stalwart-mail
+
+# Ingress configuration
 ingress:
   enabled: true
   className: "nginx"
@@ -557,14 +376,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # Security headers
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "X-Frame-Options: DENY";
-      more_set_headers "X-Content-Type-Options: nosniff";
-      more_set_headers "X-XSS-Protection: 1; mode=block";
-      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
   hosts:
     - host: mail.example.com
       paths:
@@ -575,112 +387,31 @@ ingress:
       hosts:
         - mail.example.com
 
-# External Secrets integration
-externalSecrets:
-  enabled: true
-  secretStore:
-    provider: vault  # or aws, azure, gcp
-    vault:
-      server: "https://vault.example.com"
-      path: "secret"
-      version: "v2"
-      auth:
-        kubernetes:
-          role: "stalwart-role"
-          serviceAccount: "stalwart-mail"
-          mountPath: "kubernetes"
-  
-  # Secret references
-  secrets:
-    - name: stalwart-secrets
-      data:
-        - key: postgresql.password
-          remoteRef:
-            key: stalwart/database
-            property: password
-        - key: redis.password
-          remoteRef:
-            key: stalwart/redis
-            property: password
-        - key: admin.password
-          remoteRef:
-            key: stalwart/admin
-            property: password
+# Security
+podSecurityContext:
+  fsGroup: 65534
 
-# Backup with Velero (comprehensive)
-backup:
-  enabled: true
-  velero:
-    enabled: true
-    schedule: "0 */6 * * *"  # Every 6 hours
-    ttl: "720h"  # 30 days retention
-    includeClusterResources: true
-    storageLocation: "default"
-    volumeSnapshotLocation: "default"
-    
-    # Pre-backup hooks for databases
-    hooks:
-      postgresql:
-        enabled: true
-        command: ["pg_dumpall", "-h", "postgresql-ha-pgpool", "-U", "postgres"]
-      redis:
-        enabled: true
-        command: ["redis-cli", "SAVE"]
+# Node affinity for performance
+nodeAffinity:
+  preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      preference:
+        matchExpressions:
+          - key: node-type
+            operator: In
+            values:
+              - high-performance
 
-# Pod Disruption Budget (strict)
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 2
-  # maxUnavailable: 33%
+# Tolerations for dedicated nodes
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "stalwart"
+    effect: "NoSchedule"
 
-# Priority Class (critical service)
-priorityClass:
-  create: true
-  name: "stalwart-critical-service"
-  value: 1000000
-  globalDefault: false
-  description: "Critical service priority class for Stalwart mail server"
-
-# Multi-zone topology
-topologySpreadConstraints:
-  enabled: true
-  maxSkew: 1
-  topologyKey: "topology.kubernetes.io/zone"
-  whenUnsatisfiable: "DoNotSchedule"
-
-# Audit logging
-auditLogging:
-  enabled: true
-  logLevel: "RequestResponse"
-  maxAge: 30
-  maxBackup: 10
-  maxSize: 100
-  backend: "file"  # or "elasticsearch", "loki"
-  
-  # Log forwarding
-  forward:
-    enabled: true
-    fluentd:
-      enabled: true
-      host: "fluentd.logging.svc.cluster.local"
-      port: 24224
-
-# GDPR compliance
-gdpr:
-  enabled: true
-  dataRetention:
-    emails: "7y"  # 7 years
-    logs: "1y"    # 1 year
-    userProfiles: "3y"  # 3 years
-  
-  # Data export capabilities
-  exportCapabilities:
-    enabled: true
-    formats:
-      - "mbox"
-      - "json"
-  
-  # Data deletion
-  deletionCapabilities:
-    enabled: true
-    requireConfirmation: true
+# Additional environment variables
+env:
+  - name: STALWART_PROFILE
+    value: "large"
+  - name: RUST_LOG
+    value: "info"

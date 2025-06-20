@@ -1,0 +1,23 @@
+# Helm-specific
+Chart.lock
+charts/
+
+# Node.js (si vous utilisez npm/yarn)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers temporaires
+*.swp
+*.tmp
+
+# Résultats de construction
+dist/
+
+# Fichiers générés par des outils (ex. : kubectl, helm)
+*.yaml~
+*.json~

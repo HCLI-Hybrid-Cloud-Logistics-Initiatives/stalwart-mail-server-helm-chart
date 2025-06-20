@@ -23,56 +23,46 @@ spec:
   selector:
     {{- include "stalwart-mail-server.selectorLabels" . | nindent 4 }}
   ports:
-  # Admin web interface
   - name: webadmin
-    port: {{ .Values.service.ports.webadmin.port }}
-    targetPort: {{ .Values.service.ports.webadmin.targetPort }}
-    protocol: {{ .Values.service.ports.webadmin.protocol }}
+    port: {{ .Values.service.ports.webadmin }}
+    targetPort: {{ .Values.service.ports.webadmin }}
+    protocol: TCP
   - name: webadmin-ssl
-    port: {{ .Values.service.ports.webadmin-ssl.port }}
-    targetPort: {{ .Values.service.ports.webadmin-ssl.targetPort }}
-    protocol: {{ .Values.service.ports.webadmin-ssl.protocol }}
-  
-  # IMAP ports
+    port: {{ .Values.service.ports.webadmin_ssl }}
+    targetPort: {{ .Values.service.ports.webadmin_ssl }}
+    protocol: TCP
   - name: imap
-    port: {{ .Values.service.ports.imap.port }}
-    targetPort: {{ .Values.service.ports.imap.targetPort }}
-    protocol: {{ .Values.service.ports.imap.protocol }}
+    port: {{ .Values.service.ports.imap }}
+    targetPort: {{ .Values.service.ports.imap }}
+    protocol: TCP
   - name: imaps
-    port: {{ .Values.service.ports.imaps.port }}
-    targetPort: {{ .Values.service.ports.imaps.targetPort }}
-    protocol: {{ .Values.service.ports.imaps.protocol }}
-  
-  # POP3 ports
+    port: {{ .Values.service.ports.imaps }}
+    targetPort: {{ .Values.service.ports.imaps }}
+    protocol: TCP
   - name: pop3
-    port: {{ .Values.service.ports.pop3.port }}
-    targetPort: {{ .Values.service.ports.pop3.targetPort }}
-    protocol: {{ .Values.service.ports.pop3.protocol }}
+    port: {{ .Values.service.ports.pop3 }}
+    targetPort: {{ .Values.service.ports.pop3 }}
+    protocol: TCP
   - name: pop3s
-    port: {{ .Values.service.ports.pop3s.port }}
-    targetPort: {{ .Values.service.ports.pop3s.targetPort }}
-    protocol: {{ .Values.service.ports.pop3s.protocol }}
-  
-  # SMTP ports
+    port: {{ .Values.service.ports.pop3s }}
+    targetPort: {{ .Values.service.ports.pop3s }}
+    protocol: TCP
   - name: smtp
-    port: {{ .Values.service.ports.smtp.port }}
-    targetPort: {{ .Values.service.ports.smtp.targetPort }}
-    protocol: {{ .Values.service.ports.smtp.protocol }}
+    port: {{ .Values.service.ports.smtp }}
+    targetPort: {{ .Values.service.ports.smtp }}
+    protocol: TCP
   - name: submission
-    port: {{ .Values.service.ports.submission.port }}
-    targetPort: {{ .Values.service.ports.submission.targetPort }}
-    protocol: {{ .Values.service.ports.submission.protocol }}
+    port: {{ .Values.service.ports.submission }}
+    targetPort: {{ .Values.service.ports.submission }}
+    protocol: TCP
   - name: smtps
-    port: {{ .Values.service.ports.smtps.port }}
-    targetPort: {{ .Values.service.ports.smtps.targetPort }}
-    protocol: {{ .Values.service.ports.smtps.protocol }}
-  
-  # Sieve port
+    port: {{ .Values.service.ports.smtps }}
+    targetPort: {{ .Values.service.ports.smtps }}
+    protocol: TCP
   - name: sieve
-    port: {{ .Values.service.ports.sieve.port }}
-    targetPort: {{ .Values.service.ports.sieve.targetPort }}
-    protocol: {{ .Values.service.ports.sieve.protocol }}
-
+    port: {{ .Values.service.ports.sieve }}
+    targetPort: {{ .Values.service.ports.sieve }}
+    protocol: TCP
 ---
 {{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1

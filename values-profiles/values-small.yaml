@@ -9,8 +9,8 @@ global:
 stalwart:
   replicaCount: 1  # Can be set to 2 for HA
   image:
-    repository: stalwartlabs/stalwart
-    tag: "v0.12.1"
+    repository: stalwartlabs/mail-server  # Corrected repository name
+    tag: "v0.11.8"  # Aligned with Chart.yaml appVersion
     pullPolicy: IfNotPresent
   
   strategy:
@@ -30,20 +30,20 @@ stalwart:
   persistence:
     enabled: true
     storageClass: ""  # Uses global.storageClass
-    accessMode: ReadWriteOnce  # Automatically switches to RWX if replicaCount > 1
+    accessMode: ReadWriteOnce
     size: 5Gi
   
   configPersistence:
     enabled: true
     storageClass: ""
-    accessMode: ReadWriteOnce  # Automatically switches to RWX if replicaCount > 1
+    accessMode: ReadWriteOnce
     size: 1Gi
   
-  # Pod Anti-Affinity (activated only if replicaCount > 1)
-  affinity:
-    podAntiAffinity:
-      enabled: true
-      requiredDuringSchedulingIgnoredDuringExecution: true
+  # Pod Anti-Affinity (corrected structure)
+  podAntiAffinity:
+    enabled: false  # Disabled for single replica
+    type: "preferredDuringSchedulingIgnoredDuringExecution"
+    topologyKey: "kubernetes.io/hostname"
   
   # Security Context
   securityContext:
@@ -54,54 +54,116 @@ stalwart:
     capabilities:
       drop:
         - ALL
-  
-  # Service configuration
-  service:
-    type: LoadBalancer
-    externalTrafficPolicy: Local
-    ports:
-      webadmin: 8080
-      webadmin_ssl: 443
-      smtp: 25
-      submission: 587
-      smtps: 465
-      imap: 143
-      imaps: 993
-      pop3: 110
-      pop3s: 995
-      sieve: 4190
+    seccompProfile:
+      type: RuntimeDefault
   
   # Health checks
   livenessProbe:
     httpGet:
-      path: /healthz/live
+      path: /admin
       port: 8080
     initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
     
   readinessProbe:
     httpGet:
-      path: /healthz/ready
+      path: /admin
       port: 8080
     initialDelaySeconds: 5
-    periodSeconds: 10
-    timeoutSeconds: 5
-
-# PostgreSQL Configuration (standalone)
-postgresql:
-  enabled: true
-  auth:
-    enablePostgresUser: true
-    postgresPassword: ""  # Auto-generated
-    username: stalwart
-    password: ""  # Auto-generated
-    database: stalwart
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
   
-  primary:
+  # Basic configuration for small deployments
+  config:
+    jmap:
+      maxObjectsInGet: 500
+      maxObjectsInSet: 250
+      pushEnabled: false
+    
+    smtp:
+      maxMessageSize: 26214400  # 25MB
+      maxRecipients: 50
+      maxConnections: 20
+      maxAuthAttempts: 3
+    
+    imap:
+      maxConnections: 100
+      idleTimeout: 900  # 15 minutes
+      maxAuthAttempts: 3
+    
+    security:
+      minTlsVersion: "TLSv1.2"
+      preferServerCiphers: true
+      authFailDelay: 2  # seconds
+
+# Service configuration (moved to root level)
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  annotations: {}
+  ports:
+    webadmin:
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    webadmin_ssl:
+      port: 443
+      protocol: TCP
+      targetPort: 443
+    smtp:
+      port: 25
+      protocol: TCP
+      targetPort: 25
+    submission:
+      port: 587
+      protocol: TCP
+      targetPort: 587
+    smtps:
+      port: 465
+      protocol: TCP
+      targetPort: 465
+    imap:
+      port: 143
+      protocol: TCP
+      targetPort: 143
+    imaps:
+      port: 993
+      protocol: TCP
+      targetPort: 993
+    pop3:
+      port: 110
+      protocol: TCP
+      targetPort: 110
+    pop3s:
+      port: 995
+      protocol: TCP
+      targetPort: 995
+    sieve:
+      port: 4190
+      protocol: TCP
+      targetPort: 4190
+
+# PostgreSQL HA Configuration (using the dependency from Chart.yaml)
+postgresql-ha:
+  enabled: true
+  
+  postgresql:
+    replicaCount: 1  # Single instance for small profile
+    auth:
+      enablePostgresUser: true
+      postgresPassword: ""  # Auto-generated
+      username: stalwart
+      password: ""  # Auto-generated
+      database: stalwart
+    
     persistence:
       enabled: true
-      storageClass: ""
+      storageClass: ""  # Uses global.storageClass
       size: 10Gi
     
     resources:
@@ -112,43 +174,64 @@ postgresql:
         cpu: 500m
         memory: 512Mi
     
+    # Basic PostgreSQL configuration for small deployments
+    postgresql:
+      maxConnections: "100"
+      sharedBuffers: "128MB"
+      effectiveCacheSize: "256MB"
+      maintenanceWorkMem: "64MB"
+      checkpointCompletionTarget: "0.7"
+      walBuffers: "4MB"
+      defaultStatisticsTarget: "100"
+      randomPageCost: "4.0"
+      workMem: "2MB"
+    
     # Security hardening
-    securityContext:
+    containerSecurityContext:
       enabled: true
       runAsNonRoot: true
       runAsUser: 999
-      fsGroup: 999
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
   
-  # Backup configuration
-  backup:
-    enabled: true
-    cronjob:
-      schedule: "0 2 * * *"  # Daily at 2 AM
+  # Pgpool disabled for single instance
+  pgpool:
+    replicaCount: 0
 
 # Redis Configuration (disabled for small profile)
 redis:
+  enabled: false
+
+# HPA disabled for small profile
+autoscaling:
+  enabled: false
+
+# Pod Disruption Budget disabled for single replica
+podDisruptionBudget:
   enabled: false
 
 # Network Policies (optional for small profile)
 networkPolicies:
   enabled: false
 
-# Pod Security Standards
-podSecurityPolicy:
-  enabled: true
-  policy: restricted
-
 # RBAC
 rbac:
   create: true
-  serviceAccountName: stalwart-mail
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
 
 # Monitoring (basic)
 monitoring:
   enabled: false
-  prometheus:
-    enabled: false
-  grafana:
+  serviceMonitor:
     enabled: false
 
 # Ingress (optional)
@@ -159,12 +242,19 @@ ingress:
   hosts: []
   tls: []
 
-# External Secrets (optional)
-externalSecrets:
-  enabled: false
+# Security
+podSecurityContext:
+  fsGroup: 65534
 
-# Backup with Velero (optional)
-backup:
-  enabled: false
-  velero:
-    enabled: false
+# Node affinity (not required for small profile)
+nodeAffinity: {}
+
+# Tolerations (none for small profile)
+tolerations: []
+
+# Additional environment variables
+env:
+  - name: STALWART_PROFILE
+    value: "small"
+  - name: RUST_LOG
+    value: "warn"

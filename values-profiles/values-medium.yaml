@@ -40,16 +40,15 @@ stalwart:
     size: 2Gi
   
   # Pod Anti-Affinity (mandatory for HA)
-  affinity:
-    podAntiAffinity:
-      enabled: true
-      requiredDuringSchedulingIgnoredDuringExecution: true
-      topologyKey: "kubernetes.io/hostname"
-      # Optional: prefer different zones
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            topologyKey: "topology.kubernetes.io/zone"
+  podAntiAffinity:
+    enabled: true
+    type: "requiredDuringSchedulingIgnoredDuringExecution"
+    topologyKey: "kubernetes.io/hostname"
+    # Optional: prefer different zones
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: "topology.kubernetes.io/zone"
   
   # Security Context (hardened)
   securityContext:

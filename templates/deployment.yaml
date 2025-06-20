@@ -106,7 +106,7 @@ spec:
         - sh
         - -c
         - |
-          until pg_isready -h {{ .Release.Name }}-postgresql-ha-pgpool -p 5432 -U {{ .Values.postgresql-ha.postgresql.username }}; do
+          until pg_isready -h {{ .Release.Name }}-postgresql-ha-pgpool -p 5432 -U {{ index .Values "postgresql-ha" "postgresql" "username" }}; do
             echo "Waiting for PostgreSQL..."
             sleep 2
           done
